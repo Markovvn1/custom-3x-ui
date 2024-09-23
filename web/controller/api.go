@@ -20,7 +20,6 @@ func NewAPIController(g *gin.RouterGroup) *APIController {
 
 func (a *APIController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/panel/api/inbounds")
-	g.Use(a.checkLogin)
 
 	a.inboundController = NewInboundController(g)
 

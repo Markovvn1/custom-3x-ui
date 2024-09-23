@@ -7,7 +7,6 @@ import (
 
 	"x-ui/database/model"
 	"x-ui/web/service"
-	"x-ui/web/session"
 
 	"github.com/gin-gonic/gin"
 )
@@ -44,8 +43,7 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *InboundController) getInbounds(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	inbounds, err := a.inboundService.GetInbounds()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -94,8 +92,6 @@ func (a *InboundController) addInbound(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.create"), err)
 		return
 	}
-	user := session.GetLoginUser(c)
-	inbound.UserId = user.Id
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
 		inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
 	} else {
@@ -288,9 +284,7 @@ func (a *InboundController) importInbound(c *gin.Context) {
 		jsonMsg(c, "Something went wrong!", err)
 		return
 	}
-	user := session.GetLoginUser(c)
 	inbound.Id = 0
-	inbound.UserId = user.Id
 	if inbound.Listen == "" || inbound.Listen == "0.0.0.0" || inbound.Listen == "::" || inbound.Listen == "::0" {
 		inbound.Tag = fmt.Sprintf("inbound-%v", inbound.Port)
 	} else {

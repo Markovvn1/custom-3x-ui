@@ -14,7 +14,6 @@ import (
 	"x-ui/database/model"
 	"x-ui/logger"
 	"x-ui/util/common"
-	"x-ui/util/random"
 	"x-ui/util/reflect_util"
 	"x-ui/web/entity"
 	"x-ui/xray"
@@ -30,9 +29,7 @@ var defaultValueMap = map[string]string{
 	"webPort":            "2053",
 	"webCertFile":        "",
 	"webKeyFile":         "",
-	"secret":             random.Seq(32),
 	"webBasePath":        "/",
-	"sessionMaxAge":      "60",
 	"pageSize":           "50",
 	"expireDiff":         "0",
 	"trafficDiff":        "0",
@@ -47,7 +44,6 @@ var defaultValueMap = map[string]string{
 	"tgBotLoginNotify":   "true",
 	"tgCpu":              "80",
 	"tgLang":             "en-US",
-	"secretEnable":       "false",
 	"subEnable":          "false",
 	"subListen":          "",
 	"subPort":            "2096",
@@ -157,13 +153,7 @@ func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 
 func (s *SettingService) ResetSettings() error {
 	db := database.GetDB()
-	err := db.Where("1 = 1").Delete(model.Setting{}).Error
-	if err != nil {
-		return err
-	}
-	return db.Model(model.User{}).
-		Where("1 = 1").
-		Update("login_secret", "").Error
+	return db.Where("1 = 1").Delete(model.Setting{}).Error
 }
 
 func (s *SettingService) getSetting(key string) (*model.Setting, error) {
@@ -334,31 +324,8 @@ func (s *SettingService) GetTrafficDiff() (int, error) {
 	return s.getInt("trafficDiff")
 }
 
-func (s *SettingService) GetSessionMaxAge() (int, error) {
-	return s.getInt("sessionMaxAge")
-}
-
 func (s *SettingService) GetRemarkModel() (string, error) {
 	return s.getString("remarkModel")
-}
-
-func (s *SettingService) GetSecretStatus() (bool, error) {
-	return s.getBool("secretEnable")
-}
-
-func (s *SettingService) SetSecretStatus(value bool) error {
-	return s.setBool("secretEnable", value)
-}
-
-func (s *SettingService) GetSecret() ([]byte, error) {
-	secret, err := s.getString("secret")
-	if secret == defaultValueMap["secret"] {
-		err := s.saveSetting("secret", secret)
-		if err != nil {
-			logger.Warning("save secret failed:", err)
-		}
-	}
-	return []byte(secret), err
 }
 
 func (s *SettingService) SetBasePath(basePath string) error {

@@ -49,13 +49,6 @@ func (s *XrayService) GetXrayResult() string {
 	return result
 }
 
-func (s *XrayService) GetXrayVersion() string {
-	if p == nil {
-		return "Unknown"
-	}
-	return p.GetVersion()
-}
-
 func RemoveIndex(s []interface{}, index int) []interface{} {
 	return append(s[:index], s[index+1:]...)
 }

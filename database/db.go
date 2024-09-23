@@ -19,15 +19,8 @@ import (
 
 var db *gorm.DB
 
-const (
-	defaultUsername = "admin"
-	defaultPassword = "admin"
-	defaultSecret   = ""
-)
-
 func initModels() error {
 	models := []interface{}{
-		&model.User{},
 		&model.Inbound{},
 		&model.OutboundTraffics{},
 		&model.Setting{},
@@ -39,23 +32,6 @@ func initModels() error {
 			log.Printf("Error auto migrating model: %v", err)
 			return err
 		}
-	}
-	return nil
-}
-
-func initUser() error {
-	empty, err := isTableEmpty("users")
-	if err != nil {
-		log.Printf("Error checking if users table is empty: %v", err)
-		return err
-	}
-	if empty {
-		user := &model.User{
-			Username:    defaultUsername,
-			Password:    defaultPassword,
-			LoginSecret: defaultSecret,
-		}
-		return db.Create(user).Error
 	}
 	return nil
 }
@@ -90,9 +66,6 @@ func InitDB(dbPath string) error {
 	}
 
 	if err := initModels(); err != nil {
-		return err
-	}
-	if err := initUser(); err != nil {
 		return err
 	}
 

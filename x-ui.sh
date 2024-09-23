@@ -231,27 +231,6 @@ uninstall() {
     delete_script
 }
 
-reset_user() {
-    confirm "Are you sure to reset the username and password of the panel?" "n"
-    if [[ $? != 0 ]]; then
-        if [[ $# == 0 ]]; then
-            show_menu
-        fi
-        return 0
-    fi
-    read -rp "Please set the login username [default is a random username]: " config_account
-    [[ -z $config_account ]] && config_account=$(date +%s%N | md5sum | cut -c 1-8)
-    read -rp "Please set the login password [default is a random password]: " config_password
-    [[ -z $config_password ]] && config_password=$(date +%s%N | md5sum | cut -c 1-8)
-    /usr/local/x-ui/x-ui setting -username ${config_account} -password ${config_password} >/dev/null 2>&1
-    /usr/local/x-ui/x-ui setting -remove_secret >/dev/null 2>&1
-    echo -e "Panel login username has been reset to: ${green} ${config_account} ${plain}"
-    echo -e "Panel login password has been reset to: ${green} ${config_password} ${plain}"
-    echo -e "${yellow} Panel login secret token disabled ${plain}"
-    echo -e "${green} Please use the new login username and password to access the X-UI panel. Also remember them! ${plain}"
-    confirm_restart
-}
-
 gen_random_string() {
     local length="$1"
     local random_string=$(LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w "$length" | head -n 1)
@@ -1304,7 +1283,6 @@ show_menu() {
   ${green}4.${plain} Custom Version
   ${green}5.${plain} Uninstall
 ————————————————
-  ${green}6.${plain} Reset Username & Password & Secret Token
   ${green}7.${plain} Reset Web Base Path
   ${green}8.${plain} Reset Settings
   ${green}9.${plain} Change Port
@@ -1349,9 +1327,6 @@ show_menu() {
         ;;
     5)
         check_install && uninstall
-        ;;
-    6)
-        check_install && reset_user
         ;;
     7)
         check_install && reset_webbasepath

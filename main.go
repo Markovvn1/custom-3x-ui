@@ -136,21 +136,7 @@ func showSetting(show bool) {
 			fmt.Println("get webBasePath failed, error info:", err)
 		}
 
-		userService := service.UserService{}
-		userModel, err := userService.GetFirstUser()
-		if err != nil {
-			fmt.Println("get current user info failed, error info:", err)
-		}
-
-		username := userModel.Username
-		userpasswd := userModel.Password
-		if username == "" || userpasswd == "" {
-			fmt.Println("current username or password is empty")
-		}
-
 		fmt.Println("current panel settings as follows:")
-		fmt.Println("username:", username)
-		fmt.Println("password:", userpasswd)
 		fmt.Println("port:", port)
 		if webBasePath != "" {
 			fmt.Println("webBasePath:", webBasePath)
@@ -216,7 +202,7 @@ func updateTgbotSetting(tgBotToken string, tgBotChatid string, tgBotRuntime stri
 	}
 }
 
-func updateSetting(port int, username string, password string, webBasePath string) {
+func updateSetting(port int, webBasePath string) {
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
 		fmt.Println("Database initialization failed:", err)
@@ -224,7 +210,6 @@ func updateSetting(port int, username string, password string, webBasePath strin
 	}
 
 	settingService := service.SettingService{}
-	userService := service.UserService{}
 
 	if port > 0 {
 		err := settingService.SetPort(port)
@@ -232,15 +217,6 @@ func updateSetting(port int, username string, password string, webBasePath strin
 			fmt.Println("Failed to set port:", err)
 		} else {
 			fmt.Printf("Port set successfully: %v\n", port)
-		}
-	}
-
-	if username != "" || password != "" {
-		err := userService.UpdateFirstUser(username, password)
-		if err != nil {
-			fmt.Println("Failed to update username and password:", err)
-		} else {
-			fmt.Println("Username and password updated successfully")
 		}
 	}
 
@@ -293,36 +269,6 @@ func migrateDb() {
 	fmt.Println("Migration done!")
 }
 
-func removeSecret() {
-	userService := service.UserService{}
-
-	secretExists, err := userService.CheckSecretExistence()
-	if err != nil {
-		fmt.Println("Error checking secret existence:", err)
-		return
-	}
-
-	if !secretExists {
-		fmt.Println("No secret exists to remove.")
-		return
-	}
-
-	err = userService.RemoveUserSecret()
-	if err != nil {
-		fmt.Println("Error removing secret:", err)
-		return
-	}
-
-	settingService := service.SettingService{}
-	err = settingService.SetSecretStatus(false)
-	if err != nil {
-		fmt.Println("Error updating secret status:", err)
-		return
-	}
-
-	fmt.Println("Secret removed successfully.")
-}
-
 func main() {
 	if len(os.Args) < 2 {
 		runWebServer()
@@ -336,8 +282,6 @@ func main() {
 
 	settingCmd := flag.NewFlagSet("setting", flag.ExitOnError)
 	var port int
-	var username string
-	var password string
 	var webBasePath string
 	var webCertFile string
 	var webKeyFile string
@@ -347,13 +291,9 @@ func main() {
 	var tgbotRuntime string
 	var reset bool
 	var show bool
-	var remove_secret bool
 	settingCmd.BoolVar(&reset, "reset", false, "Reset all settings")
 	settingCmd.BoolVar(&show, "show", false, "Display current settings")
-	settingCmd.BoolVar(&remove_secret, "remove_secret", false, "Remove secret key")
 	settingCmd.IntVar(&port, "port", 0, "Set panel port number")
-	settingCmd.StringVar(&username, "username", "", "Set login username")
-	settingCmd.StringVar(&password, "password", "", "Set login password")
 	settingCmd.StringVar(&webBasePath, "webBasePath", "", "Set base path for Panel")
 	settingCmd.StringVar(&webCertFile, "webCert", "", "Set path to public key file for panel")
 	settingCmd.StringVar(&webKeyFile, "webCertKey", "", "Set path to private key file for panel")
@@ -397,16 +337,13 @@ func main() {
 		if reset {
 			resetSetting()
 		} else {
-			updateSetting(port, username, password, webBasePath)
+			updateSetting(port, webBasePath)
 		}
 		if show {
 			showSetting(show)
 		}
 		if (tgbottoken != "") || (tgbotchatid != "") || (tgbotRuntime != "") {
 			updateTgbotSetting(tgbottoken, tgbotchatid, tgbotRuntime)
-		}
-		if remove_secret {
-			removeSecret()
 		}
 		if enabletgbot {
 			updateTgbotEnableSts(enabletgbot)

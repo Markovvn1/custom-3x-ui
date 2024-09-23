@@ -138,7 +138,6 @@
                   <setting-list-item type="text" title='{{ i18n "pages.settings.publicKeyPath"}}' desc='{{ i18n "pages.settings.publicKeyPathDesc"}}' v-model="allSetting.webCertFile"></setting-list-item>
                   <setting-list-item type="text" title='{{ i18n "pages.settings.privateKeyPath"}}' desc='{{ i18n "pages.settings.privateKeyPathDesc"}}' v-model="allSetting.webKeyFile"></setting-list-item>
                   <setting-list-item type="text" title='{{ i18n "pages.settings.panelUrlPath"}}' desc='{{ i18n "pages.settings.panelUrlPathDesc"}}' v-model="allSetting.webBasePath"></setting-list-item>
-                  <setting-list-item type="number" title='{{ i18n "pages.settings.sessionMaxAge" }}' desc='{{ i18n "pages.settings.sessionMaxAgeDesc" }}' v-model="allSetting.sessionMaxAge" :min="60"></setting-list-item>
                   <setting-list-item type="number" title='{{ i18n "pages.settings.pageSize" }}' desc='{{ i18n "pages.settings.pageSizeDesc" }}' v-model="allSetting.pageSize" :min="0" :step="5"></setting-list-item>
                   <setting-list-item type="number" title='{{ i18n "pages.settings.expireTimeDiff" }}' desc='{{ i18n "pages.settings.expireTimeDiffDesc" }}' v-model="allSetting.expireDiff" :min="0"></setting-list-item>
                   <setting-list-item type="number" title='{{ i18n "pages.settings.trafficDiff" }}' desc='{{ i18n "pages.settings.trafficDiffDesc" }}' v-model="allSetting.trafficDiff" :min="0"></setting-list-item>
@@ -182,59 +181,6 @@
                     </a-row>
                   </a-list-item>
                 </a-list>
-              </a-tab-pane>
-              <a-tab-pane key="2" tab='{{ i18n "pages.settings.securitySettings"}}' style="padding: 20px;">
-                <a-divider>{{ i18n "pages.settings.security.admin"}}</a-divider>
-                <a-form layout="horizontal" :colon="false" style="float: left; margin-bottom: 2rem;" :label-col="{ md: {span:10} }" :wrapper-col="{ md: {span:14} }">
-                  <a-form-item label='{{ i18n "pages.settings.oldUsername"}}'>
-                    <a-input autocomplete="username" v-model="user.oldUsername"></a-input>
-                  </a-form-item>
-                  <a-form-item label='{{ i18n "pages.settings.currentPassword"}}'>
-                    <password-input autocomplete="current-password" v-model="user.oldPassword"></password-input>
-                  </a-form-item>
-                  <a-form-item label='{{ i18n "pages.settings.newUsername"}}'>
-                    <a-input v-model="user.newUsername"></a-input>
-                  </a-form-item>
-                  <a-form-item label='{{ i18n "pages.settings.newPassword"}}'>
-                    <password-input autocomplete="new-password" v-model="user.newPassword"></password-input>
-                  </a-form-item>
-                  <a-form-item label=" ">
-                    <a-button type="primary" @click="updateUser">{{ i18n "confirm" }}</a-button>
-                  </a-form-item>
-                </a-form>
-                <a-divider>{{ i18n "pages.settings.security.secret"}}</a-divider>
-                <a-form style="padding: 0 20px;">
-                  <a-list-item>
-                    <a-row>
-                      <a-col :lg="24" :xl="12">
-                        <a-list-item-meta title='{{ i18n "pages.settings.security.loginSecurity" }}'
-                          description='{{ i18n "pages.settings.security.loginSecurityDesc" }}'>
-                        </a-list-item-meta>
-                      </a-col>
-                      <a-col :lg="24" :xl="12">
-                        <template>
-                          <a-switch @change="toggleToken(allSetting.secretEnable)" v-model="allSetting.secretEnable"></a-switch>
-                          <a-icon style="margin-left: 1rem;" v-if="allSetting.secretEnable" :spin="this.changeSecret" type="sync" @click="getNewSecret"></a-icon>
-                        </template>
-                      </a-col>
-                    </a-row>
-                  </a-list-item>
-                  <a-list-item>
-                    <a-row>
-                      <a-col :lg="24" :xl="12">
-                        <a-list-item-meta title='{{ i18n "pages.settings.security.secretToken" }}'
-                          description='{{ i18n "pages.settings.security.secretTokenDesc" }}'>
-                        </a-list-item-meta>
-                      </a-col>
-                      <a-col :lg="24" :xl="12">
-                        <template>
-                          <a-textarea type="text" :disabled="!allSetting.secretEnable" v-model="user.loginSecret"></a-textarea>
-                        </template>
-                      </a-col>
-                    </a-row>
-                  </a-list-item>
-                  <a-button type="primary" :loading="this.changeSecret" @click="updateSecret">{{ i18n "confirm" }}</a-button>
-                </a-form>
               </a-tab-pane>
               <a-tab-pane key="3" tab='{{ i18n "pages.settings.TGBotSettings"}}'>
                 <a-list item-layout="horizontal">
@@ -402,7 +348,6 @@
       siderDrawer,
       themeSwitcher,
       spinning: false,
-      changeSecret: false,
       oldAllSetting: new AllSetting(),
       allSetting: new AllSetting(),
       saveBtnDisable: true,
@@ -518,7 +463,6 @@
           app.changeRemarkSample();
           this.saveBtnDisable = true;
         }
-        await this.fetchUserSecret();
       },
       async updateAllSetting() {
         this.loading(true);
@@ -526,15 +470,6 @@
         this.loading(false);
         if (msg.success) {
           await this.getAllSetting();
-        }
-      },
-      async updateUser() {
-        this.loading(true);
-        const msg = await HttpUtil.post("/panel/setting/updateUser", this.user);
-        this.loading(false);
-        if (msg.success) {
-          this.user = {};
-          window.location.replace(basePath + "logout");
         }
       },
       async restartPanel() {
@@ -560,48 +495,6 @@
           const isTLS = webCertFile !== "" || webKeyFile !== "";
           const url = buildURL({ host, port, isTLS, base, path: "panel/settings" });
           window.location.replace(url);
-        }
-      },
-      async fetchUserSecret() {
-        this.loading(true);
-        const userMessage = await HttpUtil.post("/panel/setting/getUserSecret", this.user);
-        if (userMessage.success) {
-          this.user = userMessage.obj;
-        }
-        this.loading(false);
-      },
-      async updateSecret() {
-        this.loading(true);
-        const msg = await HttpUtil.post("/panel/setting/updateUserSecret", this.user);
-        if (msg && msg.obj) {
-          this.user = msg.obj;
-        }
-        this.loading(false);
-        await this.updateAllSetting();
-      },
-      generateRandomString(length) {
-        var chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
-        let randomString = "";
-        for (let i = 0; i < length; i++) {
-          randomString += chars[Math.floor(Math.random() * chars.length)];
-        }
-        return randomString;
-      },
-      async getNewSecret() {
-        if (!this.changeSecret) {
-          this.changeSecret = true;
-          this.user.loginSecret = '';
-          const newSecret = this.generateRandomString(64);
-          await PromiseUtil.sleep(1000);
-          this.user.loginSecret = newSecret;
-          this.changeSecret = false;
-        }
-      },
-      async toggleToken(value) {
-        if (value) {
-          await this.getNewSecret();
-        } else {
-          this.user.loginSecret = "";
         }
       },
     },

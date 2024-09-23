@@ -4,7 +4,6 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -36,20 +35,14 @@ var (
 	hashStorage *global.HashStorage
 )
 
-type LoginStatus byte
-
 const (
-	LoginSuccess        LoginStatus = 1
-	LoginFail           LoginStatus = 0
-	EmptyTelegramUserID             = int64(0)
+	EmptyTelegramUserID = int64(0)
 )
 
 type Tgbot struct {
 	inboundService InboundService
 	settingService SettingService
-	serverService  ServerService
 	xrayService    XrayService
-	lastStatus     *Status
 }
 
 func (t *Tgbot) NewTgbot() *Tgbot {
@@ -808,12 +801,6 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 	}
 
 	switch callbackQuery.Data {
-	case "get_usage":
-		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.serverUsage"))
-		t.getServerUsage(chatId)
-	case "usage_refresh":
-		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
-		t.getServerUsage(chatId, callbackQuery.Message.GetMessageID())
 	case "inbounds":
 		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.getInbounds"))
 		t.SendMsgToTgbot(chatId, t.getInboundUsages())
@@ -960,9 +947,6 @@ func (t *Tgbot) SendReport() {
 		t.SendMsgToTgbotAdmins(msg)
 	}
 
-	info := t.sendServerUsage()
-	t.SendMsgToTgbotAdmins(info)
-
 	t.sendExhaustedToAdmins()
 	t.notifyExhausted()
 
@@ -988,106 +972,6 @@ func (t *Tgbot) sendExhaustedToAdmins() {
 	for _, adminId := range adminIds {
 		t.getExhausted(int64(adminId))
 	}
-}
-
-func (t *Tgbot) getServerUsage(chatId int64, messageID ...int) string {
-	info := t.prepareServerUsageInfo()
-
-	keyboard := tu.InlineKeyboard(tu.InlineKeyboardRow(
-		tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.refresh")).WithCallbackData(t.encodeQuery("usage_refresh"))))
-
-	if len(messageID) > 0 {
-		t.editMessageTgBot(chatId, messageID[0], info, keyboard)
-	} else {
-		t.SendMsgToTgbot(chatId, info, keyboard)
-	}
-
-	return info
-}
-
-// Send server usage without an inline keyboard
-func (t *Tgbot) sendServerUsage() string {
-	info := t.prepareServerUsageInfo()
-	return info
-}
-
-func (t *Tgbot) prepareServerUsageInfo() string {
-	info, ipv4, ipv6 := "", "", ""
-
-	// get latest status of server
-	t.lastStatus = t.serverService.GetStatus(t.lastStatus)
-	onlines := p.GetOnlineClients()
-
-	info += t.I18nBot("tgbot.messages.hostname", "Hostname=="+hostname)
-	info += t.I18nBot("tgbot.messages.version", "Version=="+config.GetVersion())
-	info += t.I18nBot("tgbot.messages.xrayVersion", "XrayVersion=="+fmt.Sprint(t.lastStatus.Xray.Version))
-
-	// get ip address
-	netInterfaces, err := net.Interfaces()
-	if err != nil {
-		logger.Error("net.Interfaces failed, err: ", err.Error())
-		info += t.I18nBot("tgbot.messages.ip", "IP=="+t.I18nBot("tgbot.unknown"))
-		info += "\r\n"
-	} else {
-		for i := 0; i < len(netInterfaces); i++ {
-			if (netInterfaces[i].Flags & net.FlagUp) != 0 {
-				addrs, _ := netInterfaces[i].Addrs()
-
-				for _, address := range addrs {
-					if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-						if ipnet.IP.To4() != nil {
-							ipv4 += ipnet.IP.String() + " "
-						} else if ipnet.IP.To16() != nil && !ipnet.IP.IsLinkLocalUnicast() {
-							ipv6 += ipnet.IP.String() + " "
-						}
-					}
-				}
-			}
-		}
-
-		info += t.I18nBot("tgbot.messages.ipv4", "IPv4=="+ipv4)
-		info += t.I18nBot("tgbot.messages.ipv6", "IPv6=="+ipv6)
-	}
-
-	info += t.I18nBot("tgbot.messages.serverUpTime", "UpTime=="+strconv.FormatUint(t.lastStatus.Uptime/86400, 10), "Unit=="+t.I18nBot("tgbot.days"))
-	info += t.I18nBot("tgbot.messages.serverLoad", "Load1=="+strconv.FormatFloat(t.lastStatus.Loads[0], 'f', 2, 64), "Load2=="+strconv.FormatFloat(t.lastStatus.Loads[1], 'f', 2, 64), "Load3=="+strconv.FormatFloat(t.lastStatus.Loads[2], 'f', 2, 64))
-	info += t.I18nBot("tgbot.messages.serverMemory", "Current=="+common.FormatTraffic(int64(t.lastStatus.Mem.Current)), "Total=="+common.FormatTraffic(int64(t.lastStatus.Mem.Total)))
-	info += t.I18nBot("tgbot.messages.onlinesCount", "Count=="+fmt.Sprint(len(onlines)))
-	info += t.I18nBot("tgbot.messages.tcpCount", "Count=="+strconv.Itoa(t.lastStatus.TcpCount))
-	info += t.I18nBot("tgbot.messages.udpCount", "Count=="+strconv.Itoa(t.lastStatus.UdpCount))
-	info += t.I18nBot("tgbot.messages.traffic", "Total=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Sent+t.lastStatus.NetTraffic.Recv)), "Upload=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Sent)), "Download=="+common.FormatTraffic(int64(t.lastStatus.NetTraffic.Recv)))
-	info += t.I18nBot("tgbot.messages.xrayStatus", "State=="+fmt.Sprint(t.lastStatus.Xray.State))
-	return info
-}
-
-func (t *Tgbot) UserLoginNotify(username string, password string, ip string, time string, status LoginStatus) {
-	if !t.IsRunning() {
-		return
-	}
-
-	if username == "" || ip == "" || time == "" {
-		logger.Warning("UserLoginNotify failed, invalid info!")
-		return
-	}
-
-	loginNotifyEnabled, err := t.settingService.GetTgBotLoginNotify()
-	if err != nil || !loginNotifyEnabled {
-		return
-	}
-
-	msg := ""
-	if status == LoginSuccess {
-		msg += t.I18nBot("tgbot.messages.loginSuccess")
-		msg += t.I18nBot("tgbot.messages.hostname", "Hostname=="+hostname)
-	} else if status == LoginFail {
-		msg += t.I18nBot("tgbot.messages.loginFailed")
-		msg += t.I18nBot("tgbot.messages.hostname", "Hostname=="+hostname)
-		msg += t.I18nBot("tgbot.messages.password", "Password=="+password)
-	}
-	msg += t.I18nBot("tgbot.messages.username", "Username=="+username)
-	msg += t.I18nBot("tgbot.messages.ip", "IP=="+ip)
-	msg += t.I18nBot("tgbot.messages.time", "Time=="+time)
-	t.SendMsgToTgbotAdmins(msg)
 }
 
 func (t *Tgbot) getInboundUsages() string {

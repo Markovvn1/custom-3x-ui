@@ -22,7 +22,6 @@ type AllSetting struct {
 	WebCertFile      string `json:"webCertFile" form:"webCertFile"`
 	WebKeyFile       string `json:"webKeyFile" form:"webKeyFile"`
 	WebBasePath      string `json:"webBasePath" form:"webBasePath"`
-	SessionMaxAge    int    `json:"sessionMaxAge" form:"sessionMaxAge"`
 	PageSize         int    `json:"pageSize" form:"pageSize"`
 	ExpireDiff       int    `json:"expireDiff" form:"expireDiff"`
 	TrafficDiff      int    `json:"trafficDiff" form:"trafficDiff"`
@@ -37,7 +36,6 @@ type AllSetting struct {
 	TgCpu            int    `json:"tgCpu" form:"tgCpu"`
 	TgLang           string `json:"tgLang" form:"tgLang"`
 	TimeLocation     string `json:"timeLocation" form:"timeLocation"`
-	SecretEnable     bool   `json:"secretEnable" form:"secretEnable"`
 	SubEnable        bool   `json:"subEnable" form:"subEnable"`
 	SubListen        string `json:"subListen" form:"subListen"`
 	SubPort          int    `json:"subPort" form:"subPort"`

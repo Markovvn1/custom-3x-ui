@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,7 +22,6 @@ func NewXUIController(g *gin.RouterGroup) *XUIController {
 
 func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g = g.Group("/panel")
-	g.Use(a.checkLogin)
 
 	g.GET("/", a.index)
 	g.GET("/inbounds", a.inbounds)
@@ -33,7 +34,7 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *XUIController) index(c *gin.Context) {
-	html(c, "index.html", "pages.index.title", nil)
+	c.Redirect(http.StatusTemporaryRedirect, "inbounds")
 }
 
 func (a *XUIController) inbounds(c *gin.Context) {

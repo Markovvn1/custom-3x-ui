@@ -20,16 +20,8 @@ const (
 	WireGuard   Protocol = "wireguard"
 )
 
-type User struct {
-	Id          int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username    string `json:"username"`
-	Password    string `json:"password"`
-	LoginSecret string `json:"loginSecret"`
-}
-
 type Inbound struct {
 	Id          int                  `json:"id" form:"id" gorm:"primaryKey;autoIncrement"`
-	UserId      int                  `json:"-"`
 	Up          int64                `json:"up" form:"up"`
 	Down        int64                `json:"down" form:"down"`
 	Total       int64                `json:"total" form:"total"`

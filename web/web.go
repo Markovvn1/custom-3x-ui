@@ -25,8 +25,6 @@ import (
 	"x-ui/web/service"
 
 	"github.com/gin-contrib/gzip"
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 )
@@ -167,11 +165,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		engine.Use(middleware.DomainValidatorMiddleware(webDomain))
 	}
 
-	secret, err := s.settingService.GetSecret()
-	if err != nil {
-		return nil, err
-	}
-
 	basePath, err := s.settingService.GetBasePath()
 	if err != nil {
 		return nil, err
@@ -179,8 +172,6 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	engine.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{basePath + "panel/API/"})))
 	assetsBasePath := basePath + "assets/"
 
-	store := cookie.NewStore(secret)
-	engine.Use(sessions.Sessions("3x-ui", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
 	})

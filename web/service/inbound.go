@@ -22,10 +22,10 @@ type InboundService struct {
 	xrayApi xray.XrayAPI
 }
 
-func (s *InboundService) GetInbounds(userId int) ([]*model.Inbound, error) {
+func (s *InboundService) GetInbounds() ([]*model.Inbound, error) {
 	db := database.GetDB()
 	var inbounds []*model.Inbound
-	err := db.Model(model.Inbound{}).Preload("ClientStats").Where("user_id = ?", userId).Find(&inbounds).Error
+	err := db.Model(model.Inbound{}).Preload("ClientStats").Find(&inbounds).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
@@ -1641,7 +1641,6 @@ func (s *InboundService) ResetAllTraffics() error {
 	db := database.GetDB()
 
 	result := db.Model(model.Inbound{}).
-		Where("user_id > ?", 0).
 		Updates(map[string]interface{}{"up": 0, "down": 0})
 
 	err := result.Error
