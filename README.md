@@ -1,3 +1,10 @@
+# Main changes (compared to the original):
+* Removed authorization (I use OAuth2 Proxy)
+* Cookies removed (useless without authorization)
+* Removed system status (unnecessary load on the system)
+* Removed fail2ban (I use external authorization)
+* Removed Telegram bot (don't want anyone to enable it)
+
 [English](/README.md) | [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md)
 
 <p align="center"><a href="#"><img src="./media/3X-UI.png" alt="Image"></a></p>
