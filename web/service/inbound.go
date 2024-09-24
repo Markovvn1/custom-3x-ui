@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1114,18 +1113,6 @@ func (s *InboundService) GetInboundTags() (string, error) {
 	return string(tags), nil
 }
 
-func (s *InboundService) MigrationRemoveOrphanedTraffics() {
-	db := database.GetDB()
-	db.Exec(`
-		DELETE FROM client_traffics
-		WHERE email NOT IN (
-			SELECT JSON_EXTRACT(client.value, '$.email')
-			FROM inbounds,
-				JSON_EACH(JSON_EXTRACT(inbounds.settings, '$.clients')) AS client
-		)
-	`)
-}
-
 func (s *InboundService) AddClientStat(tx *gorm.DB, inboundId int, client *model.Client) error {
 	clientTraffic := xray.ClientTraffic{}
 	clientTraffic.InboundId = inboundId
@@ -1218,65 +1205,6 @@ func (s *InboundService) GetClientByEmail(clientEmail string) (*xray.ClientTraff
 	}
 
 	return nil, nil, common.NewError("Client Not Found In Inbound For Email:", clientEmail)
-}
-
-func (s *InboundService) SetClientTelegramUserID(trafficId int, tgId int64) (bool, error) {
-	traffic, inbound, err := s.GetClientInboundByTrafficID(trafficId)
-	if err != nil {
-		return false, err
-	}
-	if inbound == nil {
-		return false, common.NewError("Inbound Not Found For Traffic ID:", trafficId)
-	}
-
-	clientEmail := traffic.Email
-
-	oldClients, err := s.GetClients(inbound)
-	if err != nil {
-		return false, err
-	}
-
-	clientId := ""
-
-	for _, oldClient := range oldClients {
-		if oldClient.Email == clientEmail {
-			if inbound.Protocol == "trojan" {
-				clientId = oldClient.Password
-			} else if inbound.Protocol == "shadowsocks" {
-				clientId = oldClient.Email
-			} else {
-				clientId = oldClient.ID
-			}
-			break
-		}
-	}
-
-	if len(clientId) == 0 {
-		return false, common.NewError("Client Not Found For Email:", clientEmail)
-	}
-
-	var settings map[string]interface{}
-	err = json.Unmarshal([]byte(inbound.Settings), &settings)
-	if err != nil {
-		return false, err
-	}
-	clients := settings["clients"].([]interface{})
-	var newClients []interface{}
-	for client_index := range clients {
-		c := clients[client_index].(map[string]interface{})
-		if c["email"] == clientEmail {
-			c["tgId"] = tgId
-			newClients = append(newClients, interface{}(c))
-		}
-	}
-	settings["clients"] = newClients
-	modifiedSettings, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return false, err
-	}
-	inbound.Settings = string(modifiedSettings)
-	needRestart, err := s.UpdateInboundClient(inbound, clientId)
-	return needRestart, err
 }
 
 func (s *InboundService) checkIsEnabledByEmail(clientEmail string) (bool, error) {
@@ -1725,45 +1653,6 @@ func (s *InboundService) DelDepletedClients(id int) (err error) {
 	return nil
 }
 
-func (s *InboundService) GetClientTrafficTgBot(tgId int64) ([]*xray.ClientTraffic, error) {
-	db := database.GetDB()
-	var inbounds []*model.Inbound
-
-	// Retrieve inbounds where settings contain the given tgId
-	err := db.Model(model.Inbound{}).Where("settings LIKE ?", fmt.Sprintf(`%%"tgId": %d%%`, tgId)).Find(&inbounds).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		logger.Errorf("Error retrieving inbounds with tgId %d: %v", tgId, err)
-		return nil, err
-	}
-
-	var emails []string
-	for _, inbound := range inbounds {
-		clients, err := s.GetClients(inbound)
-		if err != nil {
-			logger.Errorf("Error retrieving clients for inbound %d: %v", inbound.Id, err)
-			continue
-		}
-		for _, client := range clients {
-			if client.TgID == tgId {
-				emails = append(emails, client.Email)
-			}
-		}
-	}
-
-	var traffics []*xray.ClientTraffic
-	err = db.Model(xray.ClientTraffic{}).Where("email IN ?", emails).Find(&traffics).Error
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			logger.Warning("No ClientTraffic records found for emails:", emails)
-			return nil, nil
-		}
-		logger.Errorf("Error retrieving ClientTraffic for emails %v: %v", emails, err)
-		return nil, err
-	}
-
-	return traffics, nil
-}
-
 func (s *InboundService) GetClientTrafficByEmail(email string) (traffic *xray.ClientTraffic, err error) {
 	db := database.GetDB()
 	var traffics []*xray.ClientTraffic
@@ -1884,138 +1773,8 @@ func (s *InboundService) SearchInbounds(query string) ([]*model.Inbound, error) 
 	return inbounds, nil
 }
 
-func (s *InboundService) MigrationRequirements() {
-	db := database.GetDB()
-	tx := db.Begin()
-	var err error
-	defer func() {
-		if err == nil {
-			tx.Commit()
-		} else {
-			tx.Rollback()
-		}
-	}()
-
-	// Fix inbounds based problems
-	var inbounds []*model.Inbound
-	err = tx.Model(model.Inbound{}).Where("protocol IN (?)", []string{"vmess", "vless", "trojan"}).Find(&inbounds).Error
-	if err != nil && err != gorm.ErrRecordNotFound {
-		return
-	}
-	for inbound_index := range inbounds {
-		settings := map[string]interface{}{}
-		json.Unmarshal([]byte(inbounds[inbound_index].Settings), &settings)
-		clients, ok := settings["clients"].([]interface{})
-		if ok {
-			// Fix Client configuration problems
-			var newClients []interface{}
-			for client_index := range clients {
-				c := clients[client_index].(map[string]interface{})
-
-				// Add email='' if it is not exists
-				if _, ok := c["email"]; !ok {
-					c["email"] = ""
-				}
-
-				// Convert string tgId to int64
-				if _, ok := c["tgId"]; ok {
-					var tgId interface{} = c["tgId"]
-					if tgIdStr, ok2 := tgId.(string); ok2 {
-						tgIdInt64, err := strconv.ParseInt(strings.ReplaceAll(tgIdStr, " ", ""), 10, 64)
-						if err == nil {
-							c["tgId"] = tgIdInt64
-						}
-					}
-				}
-
-				// Remove "flow": "xtls-rprx-direct"
-				if _, ok := c["flow"]; ok {
-					if c["flow"] == "xtls-rprx-direct" {
-						c["flow"] = ""
-					}
-				}
-				newClients = append(newClients, interface{}(c))
-			}
-			settings["clients"] = newClients
-			modifiedSettings, err := json.MarshalIndent(settings, "", "  ")
-			if err != nil {
-				return
-			}
-
-			inbounds[inbound_index].Settings = string(modifiedSettings)
-		}
-
-		// Add client traffic row for all clients which has email
-		modelClients, err := s.GetClients(inbounds[inbound_index])
-		if err != nil {
-			return
-		}
-		for _, modelClient := range modelClients {
-			if len(modelClient.Email) > 0 {
-				var count int64
-				tx.Model(xray.ClientTraffic{}).Where("email = ?", modelClient.Email).Count(&count)
-				if count == 0 {
-					s.AddClientStat(tx, inbounds[inbound_index].Id, &modelClient)
-				}
-			}
-		}
-	}
-	tx.Save(inbounds)
-
-	// Remove orphaned traffics
-	tx.Where("inbound_id = 0").Delete(xray.ClientTraffic{})
-
-	// Migrate old MultiDomain to External Proxy
-	var externalProxy []struct {
-		Id             int
-		Port           int
-		StreamSettings []byte
-	}
-	err = tx.Raw(`select id, port, stream_settings
-	from inbounds
-	WHERE protocol in ('vmess','vless','trojan')
-	  AND json_extract(stream_settings, '$.security') = 'tls'
-	  AND json_extract(stream_settings, '$.tlsSettings.settings.domains') IS NOT NULL`).Scan(&externalProxy).Error
-	if err != nil || len(externalProxy) == 0 {
-		return
-	}
-
-	for _, ep := range externalProxy {
-		var reverses interface{}
-		var stream map[string]interface{}
-		json.Unmarshal(ep.StreamSettings, &stream)
-		if tlsSettings, ok := stream["tlsSettings"].(map[string]interface{}); ok {
-			if settings, ok := tlsSettings["settings"].(map[string]interface{}); ok {
-				if domains, ok := settings["domains"].([]interface{}); ok {
-					for _, domain := range domains {
-						if domainMap, ok := domain.(map[string]interface{}); ok {
-							domainMap["forceTls"] = "same"
-							domainMap["port"] = ep.Port
-							domainMap["dest"] = domainMap["domain"].(string)
-							delete(domainMap, "domain")
-						}
-					}
-				}
-				reverses = settings["domains"]
-				delete(settings, "domains")
-			}
-		}
-		stream["externalProxy"] = reverses
-		newStream, _ := json.MarshalIndent(stream, " ", "  ")
-		tx.Model(model.Inbound{}).Where("id = ?", ep.Id).Update("stream_settings", newStream)
-	}
-
-	err = tx.Raw(`UPDATE inbounds
-	SET tag = REPLACE(tag, '0.0.0.0:', '')
-	WHERE INSTR(tag, '0.0.0.0:') > 0;`).Error
-	if err != nil {
-		return
-	}
-}
-
 func (s *InboundService) MigrateDB() {
-	s.MigrationRequirements()
-	s.MigrationRemoveOrphanedTraffics()
+
 }
 
 func (s *InboundService) GetOnlineClients() []string {
